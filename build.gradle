@@ -1,0 +1,136 @@
+plugins {
+    id 'org.jetbrains.intellij.platform'
+    id 'org.jetbrains.kotlin.jvm' version '2.3.0'
+}
+
+group = 'com.nx3games'
+version = '0.1.0'
+
+kotlin {
+    jvmToolchain(21)
+}
+
+intellijPlatform {
+    pluginConfiguration {
+        name = 'UnrealPasser'
+        version = project.version.toString()
+
+        ideaVersion {
+            sinceBuild = '261.24374'
+            untilBuild = '261.*'
+        }
+    }
+}
+
+dependencies {
+    intellijPlatform {
+        local('C:/Program Files/JetBrains/JetBrains Rider 2025.1')
+        bundledPlugin('com.jetbrains.rider-cpp')
+        instrumentationTools()
+    }
+}
+
+tasks.named('patchPluginXml') {
+    sinceBuild.set('261.24374')
+    untilBuild.set('261.*')
+}
+
+def backendProject = layout.projectDirectory.dir('backend/UnrealPasser.Backend')
+def backendOutput = backendProject.dir('bin/Release/net9.0')
+
+tasks.register('buildReSharperBackend', Exec) {
+    workingDir = backendProject.asFile
+    commandLine 'dotnet', 'build', 'UnrealPasser.Backend.csproj', '-c', 'Release', '-p:RiderHome=C:\\Program Files\\JetBrains\\JetBrains Rider 2025.1'
+}
+
+tasks.register('copyReSharperBackend', Copy) {
+    dependsOn tasks.named('buildReSharperBackend')
+    from(backendOutput) {
+        include 'UnrealPasser.Backend.dll'
+        include 'UnrealPasser.Backend.pdb'
+    }
+    into layout.buildDirectory.dir('resharperBackend/dotnet')
+}
+
+tasks.named('prepareSandbox') {
+    dependsOn tasks.named('copyReSharperBackend')
+    from(layout.buildDirectory.dir('resharperBackend/dotnet')) {
+        into "${intellijPlatform.projectName.get()}/dotnet"
+    }
+}
+
+tasks.register('verifyReSharperBackendCatalog') {
+    dependsOn tasks.named('buildSearchableOptions')
+    doLast {
+        def sandboxRoot = layout.buildDirectory.dir('idea-sandbox').get().asFile
+        def logs = fileTree(sandboxRoot) {
+            include '*/log/backend.*.log'
+            exclude '*/log/*-out.log'
+            exclude '*/log/*-err.log'
+        }.files.sort { a, b -> b.lastModified() <=> a.lastModified() }
+        if (logs.empty) {
+            throw new GradleException("No ReSharper backend logs found in ${sandboxRoot}")
+        }
+
+        def expectedPackage = 'Additional Ad-Hoc Application Package: unrealpasser'
+        def expectedAssembly = 'UnrealPasser.Backend, Version='
+        def catalogLog = logs.find { log ->
+            def text = log.getText('UTF-8')
+            text.contains(expectedPackage) && text.contains(expectedAssembly)
+        }
+        if (catalogLog == null) {
+            throw new GradleException("UnrealPasser ReSharper backend was not cataloged in any backend log under ${sandboxRoot}")
+        }
+        logger.lifecycle("Verified UnrealPasser ReSharper backend catalog in ${catalogLog}")
+    }
+}
+
+tasks.register('verifyProductPolicy') {
+    doLast {
+        def backend = layout.projectDirectory.file('backend/UnrealPasser.Backend/BackendComponent.cs').asFile.getText('UTF-8')
+        def service = layout.projectDirectory.file('src/main/kotlin/com/nx3games/unrealpasser/UnrealPasserServerService.kt').asFile.getText('UTF-8')
+        def server = layout.projectDirectory.file('src/main/kotlin/com/nx3games/unrealpasser/http/SerenaHttpServer.kt').asFile.getText('UTF-8')
+        def bridge = layout.projectDirectory.file('src/main/kotlin/com/nx3games/unrealpasser/symbols/ReSharperBackendRpcBridge.kt').asFile.getText('UTF-8')
+
+        [
+            'unrealReflectionSearch" => UnrealReflectionSearch',
+            'unrealAssetSearch" => UnrealAssetSearch',
+            'unrealAssetReferences" => UnrealAssetReferences',
+            'IPersistentIndexManager.GetAllSourceFiles + CppUE4Util',
+            'UE4AssetsCache.GetAssetFilesContainingWord',
+            'UE4SearchUtil.BuildUESearchTargets + UEAssetUsagesSearcher.FindPossibleReadWriteResults',
+        ].each { needle ->
+            if (!backend.contains(needle)) {
+                throw new GradleException("Backend policy check failed: missing '${needle}'")
+            }
+        }
+
+        if (!service.contains('java.lang.Boolean.getBoolean("unrealpasser.diagnosticFallback")')) {
+            throw new GradleException('Product policy check failed: diagnostic fallback flag is missing')
+        }
+        if (!service.contains('ReSharperBackendRpcBridge(project)') || !service.contains('ReSharperSymbolProvider(project, bridge)')) {
+            throw new GradleException('Product policy check failed: default provider is not the ReSharper RD bridge')
+        }
+        if (!server.contains('READ_ONLY_OPERATION')) {
+            throw new GradleException('Product policy check failed: mutation endpoints do not return read-only errors')
+        }
+        if (!bridge.contains('getInfinite')) {
+            throw new GradleException('Product policy check failed: ReSharper RD bridge is not using infinite RPC timeouts')
+        }
+
+        logger.lifecycle('Verified UnrealPasser product policy: ReSharper-first, diagnostic-only fallback, read-only mutations, no bridge timeout.')
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyProductPolicy')
+}
+
+tasks.named('runIde') {
+    jvmArgs(
+        '-Didea.trust.all.projects=true',
+        '-Djb.consents.confirmation.enabled=false',
+        '-Dide.show.tips.on.startup.default.value=false',
+        '-Dide.no.platform.update=true',
+    )
+}

@@ -1,0 +1,20 @@
+<idea-plugin>
+  <id>com.nx3games.unrealpasser</id>
+  <name>UnrealPasser</name>
+  <vendor>NX3 Games</vendor>
+
+  <depends>com.intellij.modules.rider</depends>
+  <depends optional="true">com.jetbrains.rider-cpp</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <projectService serviceImplementation="com.nx3games.unrealpasser.UnrealPasserServerService" />
+    <postStartupActivity implementation="com.nx3games.unrealpasser.UnrealPasserStartupActivity" />
+    <rd.solutionExtListener endpoint="IDE Frontend" listener="com.nx3games.unrealpasser.protocol.UnrealPasserProtocolListener" />
+    <notificationGroup id="UnrealPasser" displayType="BALLOON" />
+  </extensions>
+
+  <applicationListeners>
+    <listener class="com.nx3games.unrealpasser.UnrealPasserProjectManagerListener"
+              topic="com.intellij.openapi.project.ProjectManagerListener" />
+  </applicationListeners>
+</idea-plugin>

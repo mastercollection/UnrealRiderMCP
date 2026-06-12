@@ -1,0 +1,70 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <AssemblyName>UnrealPasser.Backend</AssemblyName>
+    <RootNamespace>UnrealPasser.Backend</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>
+    <RiderHome Condition="'$(RiderHome)' == ''">C:\Program Files\JetBrains\JetBrains Rider 2025.1</RiderHome>
+    <ReSharperHost>$(RiderHome)\lib\ReSharperHost</ReSharperHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="JetBrains.Annotations" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.Annotations.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.Lifetimes" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.Lifetimes.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.Platform.Shell" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.Platform.Shell.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.Platform.ComponentModel" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.Platform.ComponentModel.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.Platform.Core" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.Platform.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.Platform.DocumentModel" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.Platform.DocumentModel.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.Platform.ProjectModel" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.Platform.ProjectModel.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.Platform.TextControl" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.Platform.TextControl.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.Platform.Util" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.Platform.Util.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.RdFramework" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.RdFramework.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.RdFramework.Reflection" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.RdFramework.Reflection.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.Platform.RdProtocol" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.Platform.RdProtocol.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.RdBackend.Common" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.RdBackend.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.ReSharper.Psi" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.ReSharper.Psi.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.ReSharper.Daemon" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.ReSharper.Daemon.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.ReSharper.Feature.Services" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.ReSharper.Feature.Services.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.ReSharper.Cpp" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.ReSharper.Cpp.dll</HintPath>
+    </Reference>
+    <Reference Include="JetBrains.ReSharper.Feature.Services.Cpp" Private="false">
+      <HintPath>$(ReSharperHost)\JetBrains.ReSharper.Feature.Services.Cpp.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>
