@@ -118,13 +118,15 @@ class ReSharperBackendRpcBridge(
 
     private fun throwIfBackendError(response: String) {
         if (!response.contains(""""errorCode"""")) return
+        val errorCode = response.stringField("errorCode") ?: "RESHARPER_BACKEND_ERROR"
         throw ProviderFailureException(
             ApiError(
-                errorCode = response.stringField("errorCode") ?: "RESHARPER_BACKEND_ERROR",
+                errorCode = errorCode,
                 message = response.stringField("message") ?: response,
                 source = response.stringField("source") ?: "resharper",
                 recoverable = response.booleanField("recoverable") ?: true,
-            )
+            ),
+            httpStatus = if (errorCode == "UNREALPASSER_BACKEND_BAD_REQUEST") 400 else 503,
         )
     }
 

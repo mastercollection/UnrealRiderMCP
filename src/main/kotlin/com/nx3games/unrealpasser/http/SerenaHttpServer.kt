@@ -144,7 +144,10 @@ class SerenaHttpServer(
             "/unreal/reflection/search", "/mcp/unreal_reflection_search" -> withMetadata(unrealBackendOrFallback("unrealReflectionSearch", req.unrealPayload()) { unreal.searchReflection(req.unrealQuery()) }, provider = "resharper")
             "/unreal/reflection/get" -> withMetadata(unrealBackendOrFallback("unrealReflectionGet", req.unrealPayload()) { unreal.getReflection(req.unrealQuery()) }, provider = "resharper")
             "/unreal/assets/search" -> withMetadata(unrealBackendOrFallback("unrealAssetSearch", req.unrealPayload()) { unreal.searchAssets(req.unrealQuery()) }, provider = "resharper")
-            "/unreal/assets/references", "/mcp/unreal_asset_references" -> withMetadata(unrealBackendOrFallback("unrealAssetReferences", req.unrealPayload()) { unreal.assetReferences(req.unrealQuery()) }, provider = "resharper")
+            "/unreal/assets/references", "/mcp/unreal_asset_references" -> {
+                val payload = req.unrealAssetReferencesPayload()
+                withMetadata(unrealBackendOrFallback("unrealAssetReferences", payload) { unreal.assetReferences(req.unrealQuery()) }, provider = "resharper")
+            }
             "/mcp/rider_inspections" -> withMetadata(mapOf("inspections" to inspections(req)), provider = "resharper")
 
             "/getSymbolsOverview" -> withMetadata(mapOf(
@@ -291,6 +294,18 @@ class SerenaHttpServer(
         "includeChildren" to (boolean("includeChildren") ?: false),
         "includeGenerated" to (boolean("includeGenerated") ?: false),
     )
+
+    private fun JsonRequest.unrealAssetReferencesPayload(): Map<String, Any?> = unrealPayload() + mapOf(
+        "namePath" to requiredNonBlankString("namePath"),
+        "relativePath" to requiredNonBlankString("relativePath"),
+        "includeChildren" to (boolean("includeChildren") ?: true),
+    )
+
+    private fun JsonRequest.requiredNonBlankString(key: String): String {
+        val value = string(key)
+        require(!value.isNullOrBlank()) { "Missing required string field '$key'." }
+        return value
+    }
 
     private fun HttpExchange.writeJson(status: Int, value: Any?) {
         val payload = JsonWriter.write(value).toByteArray(StandardCharsets.UTF_8)

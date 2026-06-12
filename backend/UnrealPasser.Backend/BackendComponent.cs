@@ -541,8 +541,14 @@ public sealed class BackendComponent
 
     private string UnrealAssetReferences(JsonElement payload)
     {
-        var namePath = payload.GetRequiredString("namePath");
-        var relativePath = payload.GetRequiredString("relativePath");
+        var namePath = payload.GetStringOrNull("namePath");
+        if (string.IsNullOrWhiteSpace(namePath))
+            return BackendError.BadRequest("Unreal asset references require a non-empty 'namePath'.").ToJson();
+
+        var relativePath = payload.GetStringOrNull("relativePath");
+        if (string.IsNullOrWhiteSpace(relativePath))
+            return BackendError.BadRequest("Unreal asset references require a non-empty 'relativePath'.").ToJson();
+
         var includeChildren = payload.GetBooleanOrDefault("includeChildren", true);
         var limit = payload.GetInt32OrDefault("limit", 50);
         var offset = payload.GetInt32OrDefault("offset", 0);
@@ -837,7 +843,7 @@ public sealed class BackendComponent
 
     private Dictionary<string, object?>? BuildSyntheticHierarchyNode(string namePath, int remainingDepth)
     {
-        var symbol = FindSymbolSummaryByName(namePath) ?? new Dictionary<string, object?>
+        var symbol = new Dictionary<string, object?>
         {
             ["namePath"] = namePath,
             ["relativePath"] = null,
@@ -847,44 +853,7 @@ public sealed class BackendComponent
         };
 
         var node = new Dictionary<string, object?> { ["symbol"] = symbol };
-        if (remainingDepth <= 0)
-            return node;
-
-        var relativePath = symbol.TryGetValue("relativePath", out var pathValue) ? pathValue as string : null;
-        if (string.IsNullOrWhiteSpace(relativePath))
-            return node;
-
-        var children = GetCppBaseNamesFromDeclaration(FindDeclaration(relativePath, namePath))
-            .Select(baseName => BuildSyntheticHierarchyNode(baseName, remainingDepth - 1))
-            .Where(child => child != null)
-            .ToList();
-        if (children.Count > 0)
-            node["children"] = children;
         return node;
-    }
-
-    private Dictionary<string, object?>? FindSymbolSummaryByName(string namePath)
-    {
-        foreach (var sourceFile in EnumerateReflectionSourceFiles(relativePath: null, pathPrefix: "Source", includeGenerated: false))
-        {
-            var relativePath = TryToRelativePath(sourceFile);
-            if (relativePath == null)
-                continue;
-
-            foreach (var psiFile in SafeGetPsiFiles(sourceFile))
-            {
-                var symbols = new List<Dictionary<string, object?>>();
-                CollectDeclarations(psiFile, relativePath, depth: 0, includeBody: false, symbols);
-                var match = symbols.FirstOrDefault(symbol => SymbolMatches(symbol, namePath));
-                if (match != null)
-                {
-                    match["providerDetail"] = "ReSharper C++ PSI declaration lookup";
-                    return match;
-                }
-            }
-        }
-
-        return null;
     }
 
     private Dictionary<string, object?>? BuildDeclaredElementSymbol(IDeclaredElement element)
@@ -970,6 +939,8 @@ public sealed class BackendComponent
             GetUnrealReflectionKindFromPsi(declaration) ??
             GetUnrealReflectionKindFromDocument(declaration);
         if (reflectionKind == null)
+            return null;
+        if (!IsReflectionKindApplicable(declaredElement, reflectionKind))
             return null;
 
         var range = declaration.GetNavigationRange();
@@ -1059,8 +1030,12 @@ public sealed class BackendComponent
 
         var windowStart = Math.Max(0, offset - 768);
         var prefix = text.Substring(windowStart, offset - windowStart);
-        var lastMacro = LastReflectionMacro(prefix);
+        var macro = LastReflectionMacro(prefix);
+        var lastMacro = macro?.Macro;
         if (lastMacro == null)
+            return null;
+
+        if (macro != null && HasDeclarationBoundaryAfterMacro(prefix, macro.Value.Index, lastMacro))
             return null;
 
         var declarationText = declaration.GetText().TrimStart();
@@ -1073,6 +1048,28 @@ public sealed class BackendComponent
             return null;
 
         return lastMacro;
+    }
+
+    private static bool IsReflectionKindApplicable(IDeclaredElement declaredElement, string reflectionKind)
+    {
+        var elementType = declaredElement.GetElementType().ToString();
+        return reflectionKind switch
+        {
+            "UCLASS" or "UINTERFACE" => elementType.Contains("class", StringComparison.OrdinalIgnoreCase),
+            "USTRUCT" => elementType.Contains("struct", StringComparison.OrdinalIgnoreCase),
+            "UENUM" => elementType.Contains("enum", StringComparison.OrdinalIgnoreCase),
+            "UFUNCTION" => elementType.Contains("function", StringComparison.OrdinalIgnoreCase) ||
+                elementType.Contains("method", StringComparison.OrdinalIgnoreCase) ||
+                elementType.Contains("함수", StringComparison.OrdinalIgnoreCase) ||
+                elementType.Contains("메서드", StringComparison.OrdinalIgnoreCase),
+            "UPROPERTY" => elementType.Contains("field", StringComparison.OrdinalIgnoreCase) ||
+                elementType.Contains("variable", StringComparison.OrdinalIgnoreCase) ||
+                elementType.Contains("property", StringComparison.OrdinalIgnoreCase) ||
+                elementType.Contains("필드", StringComparison.OrdinalIgnoreCase) ||
+                elementType.Contains("변수", StringComparison.OrdinalIgnoreCase) ||
+                elementType.Contains("속성", StringComparison.OrdinalIgnoreCase),
+            _ => true,
+        };
     }
 
     private static string? FindNearestReflectionMacro(ITreeNode node)
@@ -1137,7 +1134,7 @@ public sealed class BackendComponent
         return null;
     }
 
-    private static string? LastReflectionMacro(string text)
+    private static (string Macro, int Index)? LastReflectionMacro(string text)
     {
         string? best = null;
         var bestIndex = -1;
@@ -1151,7 +1148,36 @@ public sealed class BackendComponent
             }
         }
 
-        return best;
+        return best == null ? null : (best, bestIndex);
+    }
+
+    private static bool HasDeclarationBoundaryAfterMacro(string text, int macroIndex, string macro)
+    {
+        var start = macroIndex + macro.Length;
+        var tail = text.Substring(start);
+        var parenDepth = 0;
+        foreach (var ch in tail)
+        {
+            if (ch == '(')
+            {
+                parenDepth++;
+                continue;
+            }
+
+            if (ch == ')' && parenDepth > 0)
+            {
+                parenDepth--;
+                continue;
+            }
+
+            if (parenDepth > 0)
+                continue;
+
+            if (ch == ';' || ch == '}' || ch == '{')
+                return true;
+        }
+
+        return false;
     }
 
     private static bool IsDeclarationBoundary(string text)
