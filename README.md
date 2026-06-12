@@ -23,6 +23,7 @@ The product path is intentionally read-only and ReSharper-first. The Rider front
   - `POST /mcp/unreal_reflection_search`
   - `POST /mcp/unreal_asset_references`
   - `POST /mcp/rider_inspections`
+- Adds a protocol-compliant stdio MCP adapter under `mcp/` for Codex and Claude Code.
 - Returns read-only errors for edit/debug endpoints.
 - Includes response metadata on every API response:
   - `provider`
@@ -80,6 +81,34 @@ language_backend: JetBrains
 ```
 
 UnrealPasser reports the Rider project root from `/status`; Serena matches that against its active project path.
+
+## MCP Usage
+
+Build the stdio MCP adapter:
+
+```powershell
+cd mcp
+npm install
+npm run build
+```
+
+Codex config example:
+
+```toml
+[mcp_servers.unrealpasser]
+command = "node"
+args = ["C:\\tools\\UnrealPasser\\mcp\\dist\\server.js"]
+startup_timeout_sec = 10
+tool_timeout_sec = 120
+```
+
+Claude Code example:
+
+```powershell
+claude mcp add --transport stdio unrealpasser -- node C:\tools\UnrealPasser\mcp\dist\server.js
+```
+
+Rider must be open with the Unreal project loaded. The adapter scans `127.0.0.1:24226..24245` for the UnrealPasser HTTP server.
 
 ## Diagnostic Fallback
 

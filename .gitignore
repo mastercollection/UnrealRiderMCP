@@ -8,3 +8,5 @@ out/
 
 **/bin/
 **/obj/
+**/node_modules/
+mcp/dist/
